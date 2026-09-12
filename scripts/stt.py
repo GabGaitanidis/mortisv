@@ -26,7 +26,7 @@ MAX_RECORD_SECONDS = 15
 VAD_AGGRESSIVENESS = 0
 
 vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
-client = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
+client = Groq(api_key=os.getenv("API_KEY", ""))
 
 def record_until_silence():
     frames = []

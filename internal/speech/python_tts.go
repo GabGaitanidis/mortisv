@@ -33,10 +33,9 @@ type PythonTTS struct {
 
 var _ TtsBridge = (*PythonTTS)(nil)
 
-func NewPythonTTS(pythonBin, scriptPath string, logger *slog.Logger) *PythonTTS {
-	if pythonBin == "" {
-		pythonBin = "python3"
-	}
+func NewPythonTTS(scriptPath string, logger *slog.Logger) *PythonTTS {
+	var pythonBin = "/home/gabz/Desktop/projects/mortisgo/mortis-go/venv/bin/python3"
+
 	return &PythonTTS{
 		pythonBin:  pythonBin,
 		scriptPath: scriptPath,
@@ -54,17 +53,17 @@ func (t *PythonTTS) Start(ctx context.Context) error {
 	cmd := exec.CommandContext(context.Background(), t.pythonBin, t.scriptPath)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("tts: stdin pipe: %w", err)
+		return fmt.Errorf("tts: stdin pipe: ", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("tts: stdout pipe: %w", err)
+		return fmt.Errorf("tts: stdout pipe: ", err)
 	}
 
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("tts: start process: %w", err)
+		return fmt.Errorf("tts: start process: ", err)
 	}
 
 	t.cmd = cmd
@@ -74,11 +73,11 @@ func (t *PythonTTS) Start(ctx context.Context) error {
 	readyErr := make(chan error, 1)
 	go func() {
 		if !t.scanner.Scan() {
-			readyErr <- fmt.Errorf("tts: process exited before READY: %w", t.scanner.Err())
+			readyErr <- fmt.Errorf("tts: process exited before READY: ", t.scanner.Err())
 			return
 		}
 		if line := t.scanner.Text(); line != "READY" {
-			readyErr <- fmt.Errorf("tts: unexpected startup line: %q", line)
+			readyErr <- fmt.Errorf("tts: unexpected startup line: ", line)
 			return
 		}
 		readyErr <- nil
@@ -94,7 +93,7 @@ func (t *PythonTTS) Start(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		_ = cmd.Process.Kill()
-		return fmt.Errorf("tts: startup cancelled: %w", ctx.Err())
+		return fmt.Errorf("tts: startup cancelled: ", ctx.Err())
 	}
 }
 
@@ -117,19 +116,19 @@ func (t *PythonTTS) Speak(text string) error {
 	t.logger.Info("tts: speaking", "state", StateSpeaking, "text_len", len(line))
 
 	if _, err := fmt.Fprintln(t.stdin, line); err != nil {
-		return fmt.Errorf("tts: write to subprocess: %w", err)
+		return fmt.Errorf("tts: write to subprocess: ", err)
 	}
 
 	if !t.scanner.Scan() {
-		return fmt.Errorf("tts: subprocess closed unexpectedly: %w", t.scanner.Err())
+		return fmt.Errorf("tts: subprocess closed unexpectedly: ", t.scanner.Err())
 	}
 
 	resp := t.scanner.Text()
 	if strings.HasPrefix(resp, "ERROR:") {
-		return fmt.Errorf("tts: %s", strings.TrimSpace(strings.TrimPrefix(resp, "ERROR:")))
+		return fmt.Errorf("tts: ", strings.TrimSpace(strings.TrimPrefix(resp, "ERROR:")))
 	}
 	if resp != "DONE" {
-		return fmt.Errorf("tts: unexpected response: %q", resp)
+		return fmt.Errorf("tts: unexpected response: ", resp)
 	}
 
 	t.logger.Info("tts: done speaking", "state", StateReady)
@@ -160,6 +159,6 @@ func (t *PythonTTS) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		_ = t.cmd.Process.Kill()
 		t.cmd = nil
-		return fmt.Errorf("tts: shutdown timed out, process killed: %w", ctx.Err())
+		return fmt.Errorf("tts: shutdown timed out, process killed: ", ctx.Err())
 	}
 }

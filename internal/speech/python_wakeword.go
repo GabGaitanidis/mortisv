@@ -38,10 +38,8 @@ type WakeWordBridge interface {
 
 var _ WakeWordBridge = (*PythonWakeWord)(nil)
 
-func NewPythonWakeWord(pythonBin, scriptPath string, logger *slog.Logger) *PythonWakeWord {
-	if pythonBin == "" {
-		pythonBin = "python3"
-	}
+func NewPythonWakeWord(scriptPath string, logger *slog.Logger) *PythonWakeWord {
+	var pythonBin = "/home/gabz/Desktop/projects/mortisgo/mortis-go/venv/bin/python3"
 	return &PythonWakeWord{
 		pythonBin:  pythonBin,
 		scriptPath: scriptPath,
@@ -58,16 +56,16 @@ func (t *PythonWakeWord) Start(ctx context.Context) error {
 	cmd := exec.CommandContext(context.Background(), t.pythonBin, t.scriptPath)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("wakeword: stdin pipe: %w", err)
+		return fmt.Errorf("wakeword: stdin pipe: ", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("wakeword: stdout pipe: %w", err)
+		return fmt.Errorf("wakeword: stdout pipe: ", err)
 	}
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("wakeword: start process: %w", err)
+		return fmt.Errorf("wakeword: start process: ", err)
 	}
 
 	t.cmd = cmd
@@ -77,11 +75,11 @@ func (t *PythonWakeWord) Start(ctx context.Context) error {
 	readyErr := make(chan error, 1)
 	go func() {
 		if !t.scanner.Scan() {
-			readyErr <- fmt.Errorf("wakeword: process exited before READY: %w", t.scanner.Err())
+			readyErr <- fmt.Errorf("wakeword: process exited before READY: ", t.scanner.Err())
 			return
 		}
 		if line := t.scanner.Text(); line != "READY" {
-			readyErr <- fmt.Errorf("wakeword: unexpected startup line: %q", line)
+			readyErr <- fmt.Errorf("wakeword: unexpected startup line: ", line)
 			return
 		}
 		readyErr <- nil
@@ -97,7 +95,7 @@ func (t *PythonWakeWord) Start(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		_ = cmd.Process.Kill()
-		return fmt.Errorf("wakeword: startup cancelled: %w", ctx.Err())
+		return fmt.Errorf("wakeword: startup cancelled: ", ctx.Err())
 	}
 }
 
@@ -108,30 +106,25 @@ func (t *PythonWakeWord) Listen() error {
 
 	if t.cmd == nil {
 		return fmt.Errorf("wakeword: Listen called before Start")
-		
 	}
 
 	t.logger.Info("listening for wake word", "state", StateWakeListening)
 
 	if _, err := fmt.Fprintln(t.stdin, "listen"); err != nil {
-		return fmt.Errorf("wakeword: write to subprocess: %w", err)
+		return fmt.Errorf("wakeword: write to subprocess: ", err)
 	}
 
 	if !t.scanner.Scan() {
-		return fmt.Errorf("wakeword: subprocess closed unexpectedly: %w", t.scanner.Err())
+		return fmt.Errorf("wakeword: subprocess closed unexpectedly: ", t.scanner.Err())
 	}
 
-	for {
-		resp := t.scanner.Text()
-		if resp != "detected" {
-			continue
-		} else {
-			t.logger.Info("wake word detected", "state", StateWakeReady)
-			return nil
-		}
+	resp := t.scanner.Text()
+	if resp != "detected" {
+		return fmt.Errorf("wakeword: unexpected response: ", resp)
 	}
-	
 
+	t.logger.Info("wake word detected", "state", StateWakeReady)
+	return nil
 }
 
 func (t *PythonWakeWord) Shutdown(ctx context.Context) error {
@@ -157,6 +150,6 @@ func (t *PythonWakeWord) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		_ = t.cmd.Process.Kill()
 		t.cmd = nil
-		return fmt.Errorf("wakeword: shutdown timed out, process killed: %w", ctx.Err())
+		return fmt.Errorf("wakeword: shutdown timed out, process killed: ", ctx.Err())
 	}
 }

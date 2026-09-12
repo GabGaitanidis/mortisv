@@ -29,7 +29,7 @@ func NewPromptBuilder(modules []core.Module) *PromptBuilder {
 func (b *PromptBuilder) Build(userInput string, profile Profile, recentRapport []rapport.Entry) string {
 	sections := []string{
 		persona,
-		b.userContext(userInput, profile, recentRapport),
+		b.userContext(profile, recentRapport),
 		rules,
 		outputFormat,
 		b.moduleDefinitions(),
@@ -39,7 +39,7 @@ func (b *PromptBuilder) Build(userInput string, profile Profile, recentRapport [
 	return strings.Join(sections, "\n\n")
 }
 
-func (b *PromptBuilder) userContext(userInput string, profile Profile, recentRapport []rapport.Entry) string {
+func (b *PromptBuilder) userContext(profile Profile, recentRapport []rapport.Entry) string {
 	profileText := "(no known facts yet)"
 	if profile != nil {
 		profileText = profile.ToPromptString()
@@ -54,7 +54,7 @@ func (b *PromptBuilder) userContext(userInput string, profile Profile, recentRap
 		rapportText = strings.Join(lines, "\n")
 	}
 
-	return fmt.Sprintf("USER_INPUT\n\n%s\n\nUSER_PROFILE\n\n%s\n\nRECENT_RAPPORT\n\n%s", userInput, profileText, rapportText)
+	return fmt.Sprintf("USER_INPUT\n\n%s\n\nUSER_PROFILE\n\n%s\n\nRECENT_RAPPORT\n\n%s", profileText, rapportText)
 }
 
 func (b *PromptBuilder) context(

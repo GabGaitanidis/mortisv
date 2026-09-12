@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"mortis/internal/core"
 	"mortis/internal/logging"
@@ -10,37 +11,44 @@ import (
 	"mortis/internal/userprofile"
 )
 
+const recentRapportLimit = 10
+
 type AIManager struct {
 	client       *GroqClient
 	modules      []core.Module
+	logger       *logging.Logger
 	profileStore *userprofile.ProfileStore
 	rapportStore *rapport.Store
-	logger       *logging.Logger
 }
 
-func NewAIManager(client *GroqClient, modules []core.Module, logger *slog.Logger, profileStore *userprofile.ProfileStore, rapportStore *rapport.Store) *AIManager {
+func NewAIManager(
+	client *GroqClient,
+	modules []core.Module,
+	logger *slog.Logger,
+	profileStore *userprofile.ProfileStore,
+	rapportStore *rapport.Store,
+) *AIManager {
 	return &AIManager{
 		client:       client,
 		modules:      modules,
+		logger:       logging.New(logger, "AIManager"),
 		profileStore: profileStore,
 		rapportStore: rapportStore,
-		logger:       logging.New(logger, "AIManager"),
 	}
 }
 
 func (m *AIManager) Ask(ctx context.Context, userInput string) string {
 	m.logger.Info("input delivered", "input_len", len(userInput))
 
-	profile, err := m.currentProfile()
+	profile, err := m.profileStore.Load()
 	if err != nil {
-		m.logger.Error("error loading profile", "error", err)
-		profile = nil
+		m.logger.Error("failed to load profile, continuing with empty profile", "error", err)
+		profile = userprofile.NewUserProfile()
 	}
 
-	recentRapport, err := m.recentRapport()
+	recentRapport, err := m.rapportStore.Recent(recentRapportLimit)
 	if err != nil {
-		m.logger.Error("error loading rapport", "error", err)
-		recentRapport = nil
+		m.logger.Error("failed to load rapport, continuing with none", "error", err)
 	}
 
 	builder := NewPromptBuilder(m.modules)
@@ -52,19 +60,23 @@ func (m *AIManager) Ask(ctx context.Context, userInput string) string {
 		return "There is something wrong with the server, please check logs"
 	}
 
+	go m.checkPostExchange(profile, recentRapport, userInput, response)
+
 	return response
 }
 
-func (m *AIManager) currentProfile() (Profile, error) {
-	if m.profileStore == nil {
-		return nil, nil
-	}
-	return m.profileStore.Load()
-}
+func (m *AIManager) checkPostExchange(profile *userprofile.UserProfile, recentRapport []rapport.Entry, userInput, response string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-func (m *AIManager) recentRapport() ([]rapport.Entry, error) {
-	if m.rapportStore == nil {
-		return nil, nil
+	builder := NewPromptBuilder(m.modules)
+	result, err := CheckPostExchange(ctx, m.client, builder, profile, recentRapport, userInput, response)
+	if err != nil {
+		m.logger.Error("post-exchange check failed", "error", err)
+		return
 	}
-	return m.rapportStore.Recent(10)
+
+	if err := ApplyPostExchange(m.profileStore, m.rapportStore, profile, result); err != nil {
+		m.logger.Error("failed to apply post-exchange result", "error", err)
+	}
 }

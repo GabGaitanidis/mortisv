@@ -2,9 +2,10 @@ package core
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 
+	"mortis/internal/logging"
 	"mortis/internal/speech"
 )
 
@@ -13,10 +14,15 @@ var resultRefPattern = regexp.MustCompile(`\$result\[([^\]]+)\]`)
 type CommandRouter struct {
 	Modules map[string]Module
 	Tts     speech.TtsBridge
+	logger  *logging.Logger
 }
 
-func NewCommandRouter(tts speech.TtsBridge, modules map[string]Module) *CommandRouter {
-	return &CommandRouter{Modules: modules, Tts: tts}
+func NewCommandRouter(tts speech.TtsBridge, modules map[string]Module, logger *slog.Logger) *CommandRouter {
+	return &CommandRouter{
+		Modules: modules,
+		Tts:     tts,
+		logger:  logging.New(logger, "CommandRouter"),
+	}
 }
 
 func (r *CommandRouter) RouteAll(commands []Command) error {
@@ -24,17 +30,17 @@ func (r *CommandRouter) RouteAll(commands []Command) error {
 	resultsByKey := map[string]string{}
 
 	for i, cmd := range commands {
-		resolveReferences(&cmd, resultsByActivity, resultsByKey)
+		r.resolveReferences(&cmd, resultsByActivity, resultsByKey)
 
 		module, ok := r.Modules[cmd.Module]
 		if !ok {
-			log.Printf("unknown module: %s", cmd.Module)
+			r.logger.Warn("unknown module", "module", cmd.Module)
 			continue
 		}
 
 		result, err := module.Execute(cmd, r.Tts)
 		if err != nil {
-			log.Printf("command failed: %s - %v", cmd.ActivityName, err)
+			r.logger.Error("command failed", "activity", cmd.ActivityName, "error", err)
 			continue
 		}
 
@@ -48,15 +54,15 @@ func (r *CommandRouter) RouteAll(commands []Command) error {
 		if hasMore {
 			speakText = result + " and"
 		}
-		log.Printf("Speaking... %s", speakText)
+		r.logger.Info("speaking", "text", speakText)
 		if err := r.Tts.Speak(speakText); err != nil {
-			log.Printf("tts error: %v", err)
+			r.logger.Error("tts error", "error", err)
 		}
 	}
 	return nil
 }
 
-func resolveReferences(cmd *Command, byActivity, byKey map[string]string) {
+func (r *CommandRouter) resolveReferences(cmd *Command, byActivity, byKey map[string]string) {
 	for k, v := range cmd.Params {
 		strVal, ok := v.(string)
 		if !ok {
@@ -70,7 +76,7 @@ func resolveReferences(cmd *Command, byActivity, byKey map[string]string) {
 			if replacement, ok := byKey[ref]; ok {
 				return replacement
 			}
-			log.Printf("[CHAIN] could not resolve reference: %s", ref)
+			r.logger.Warn("could not resolve reference", "reference", ref)
 			return match
 		})
 		cmd.Params[k] = resolved

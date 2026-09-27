@@ -1,51 +1,113 @@
-from piper.voice import PiperVoice
-import wave
+import os
+import shutil
 import subprocess
 import sys
-import os
+import tempfile
+import wave
 from pathlib import Path
-from env_utils import load_env
 
-load_env()
+from piper.voice import PiperVoice
 
-voice = PiperVoice.load(
-    os.getenv("MORTIS_PIPER_VOICE_PATH", str(Path.home() / "piper-voices" / "en_US-lessac-medium.onnx"))
-)
 
-AUDIO_PATH = os.getenv("MORTIS_ANSWER_AUDIO_PATH", str(Path.home() / "mortisAnswer.wav"))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+VOICE_PATH = Path(os.environ.get(
+    "MORTIS_PIPER_VOICE_PATH",
+    str(PROJECT_ROOT / "piper-voices/en_US-lessac-medium.onnx"),
+))
 
-def speak(text):
+if not VOICE_PATH.is_file():
+    raise FileNotFoundError(f"Piper voice model not found: {VOICE_PATH}")
+
+CONFIG_PATH = Path(f"{VOICE_PATH}.json")
+if not CONFIG_PATH.is_file():
+    raise FileNotFoundError(f"Piper voice config not found: {CONFIG_PATH}")
+
+voice = PiperVoice.load(str(VOICE_PATH))
+
+
+def play_audio(audio_path: Path) -> None:
+    if sys.platform == "darwin":
+        subprocess.run(
+            ["/usr/bin/afplay", "-v", "1.0", str(audio_path)],
+            check=True,
+        )
+        return
+
+    if sys.platform == "win32":
+        import winsound
+
+        winsound.PlaySound(
+            str(audio_path),
+            winsound.SND_FILENAME | winsound.SND_SYNC,
+        )
+        return
+
+    if sys.platform.startswith("linux"):
+        players = (
+            ("paplay", [str(audio_path)]),
+            ("aplay", ["-q", str(audio_path)]),
+            ("ffplay", ["-nodisp", "-autoexit", "-loglevel", "quiet", str(audio_path)]),
+        )
+
+        for executable, arguments in players:
+            if shutil.which(executable):
+                subprocess.run([executable, *arguments], check=True)
+                return
+
+        raise RuntimeError(
+            "No Linux audio player found. Install pulseaudio-utils, alsa-utils, "
+            "or ffmpeg."
+        )
+
+    raise RuntimeError(f"Unsupported operating system: {sys.platform}")
+
+
+def speak(text: str) -> None:
+    text = text.strip()
     if not text:
         return
 
-    with wave.open(AUDIO_PATH, "wb") as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(voice.config.sample_rate)
+    with tempfile.NamedTemporaryFile(
+        prefix="mortis-",
+        suffix=".wav",
+        delete=False,
+    ) as temporary_file:
+        audio_path = Path(temporary_file.name)
 
-        for chunk in voice.synthesize(text):
-            wav_file.writeframes(chunk.audio_int16_bytes)
+    try:
+        with wave.open(str(audio_path), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(voice.config.sample_rate)
 
-    subprocess.run(["paplay", AUDIO_PATH])
+            for chunk in voice.synthesize(text):
+                wav_file.writeframes(chunk.audio_int16_bytes)
 
-def main():
-    print("READY", flush=True)  
+        play_audio(audio_path)
+    finally:
+        audio_path.unlink(missing_ok=True)
 
-    for line in sys.stdin:
-        text = line.strip()
-        if not text:
-            continue
-        if text == "__EXIT__":
-            break
 
-        try:
-            speak(text)
-            print("DONE", flush=True)
-        except Exception as e:
-            print(f"ERROR: {e}".replace("\n", " "), flush=True) 
+def main() -> None:
+    print("READY", flush=True)
 
-    if os.path.exists(AUDIO_PATH):
-        os.remove(AUDIO_PATH)  
+    try:
+        for line in sys.stdin:
+            text = line.strip()
+
+            if not text:
+                continue
+            if text == "__EXIT__":
+                break
+
+            try:
+                speak(text)
+                print("DONE", flush=True)
+            except Exception as error:
+                print(f"ERROR: {error}", flush=True)
+    except KeyboardInterrupt:
+        pass
+
 
 if __name__ == "__main__":
     main()

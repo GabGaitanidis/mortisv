@@ -18,3 +18,20 @@ func (c Command) GetString(key string) string {
 	}
 	return v
 }
+
+func (c Command) GetStringSlice(key string) []string {
+	if values, ok := c.Params[key].([]string); ok {
+		return values
+	}
+	items, ok := c.Params[key].([]interface{})
+	if !ok {
+		return nil
+	}
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		if value, ok := item.(string); ok {
+			values = append(values, value)
+		}
+	}
+	return values
+}

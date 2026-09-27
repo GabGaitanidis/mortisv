@@ -66,7 +66,7 @@ def process_once():
     mean_amp = np.abs(audio).mean()
     print(f"DEBUG mean amplitude: {mean_amp}", file=sys.stderr)
 
-    if not got_speech or mean_amp < 1200:
+    if not got_speech or mean_amp < 200:
         return "no input"
 
     buf_path = "/tmp/mortis_stt_tmp.wav"

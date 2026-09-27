@@ -5,9 +5,8 @@ import sounddevice as sd
 
 os.environ["OMP_NUM_THREADS"] = "1"
 
-MODEL_PATH = os.getenv("MORTIS_WAKEWORD_MODEL_PATH", "/home/gabz/Downloads/hey_mortis.onnx "
-                       )
-WAKEWORD_NAME = "hey_mortis"  
+WAKEWORD_NAME = "hey_jarvis"
+
 
 def wait_for_wake_word(model):
     samplerate = 16000
@@ -32,8 +31,9 @@ def wait_for_wake_word(model):
         pass
     sd.stop()
 
+
 def main():
-    model = Model(wakeword_model_paths=["/home/gabz/Downloads/hey_mortis.onnx"])
+    model = Model(wakeword_models=[WAKEWORD_NAME], inference_framework="onnx")
     print("READY", flush=True)
 
     for line in sys.stdin:
@@ -41,9 +41,10 @@ def main():
         if cmd == "__EXIT__":
             break
         if cmd == "listen":
-            model.reset()  
+            model.reset()
             wait_for_wake_word(model)
             print("detected", flush=True)
+
 
 if __name__ == "__main__":
     main()

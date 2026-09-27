@@ -12,13 +12,11 @@ import (
 	"sync"
 )
 
-
 const (
 	StateSttStarting = "stt_starting"
 	StateSttReady    = "stt_ready"
 	StateListening   = "stt_listening"
 )
-
 
 type PythonSTT struct {
 	pythonBin  string
@@ -34,15 +32,12 @@ type PythonSTT struct {
 var _ SttBridge = (*PythonSTT)(nil)
 
 func NewPythonSTT(scriptPath string, logger *slog.Logger) *PythonSTT {
-	var pythonBin = "/home/gabz/Desktop/projects/mortisgo/mortis-go/venv/bin/python3"
-
 	return &PythonSTT{
-		pythonBin:  pythonBin,
+		pythonBin:  pythonBin(),
 		scriptPath: scriptPath,
 		logger:     logger,
 	}
 }
-
 
 func (t *PythonSTT) Start(ctx context.Context) error {
 	t.mu.Lock()

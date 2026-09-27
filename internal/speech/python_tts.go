@@ -12,7 +12,6 @@ import (
 	"sync"
 )
 
-
 const (
 	StateStarting = "tts_starting"
 	StateReady    = "tts_ready"
@@ -34,15 +33,12 @@ type PythonTTS struct {
 var _ TtsBridge = (*PythonTTS)(nil)
 
 func NewPythonTTS(scriptPath string, logger *slog.Logger) *PythonTTS {
-	var pythonBin = "/home/gabz/Desktop/projects/mortisgo/mortis-go/venv/bin/python3"
-
 	return &PythonTTS{
-		pythonBin:  pythonBin,
+		pythonBin:  pythonBin(),
 		scriptPath: scriptPath,
 		logger:     logger,
 	}
 }
-
 
 func (t *PythonTTS) Start(ctx context.Context) error {
 	t.mu.Lock()
@@ -97,7 +93,6 @@ func (t *PythonTTS) Start(ctx context.Context) error {
 	}
 }
 
-
 func (t *PythonTTS) Speak(text string) error {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -145,7 +140,6 @@ func (t *PythonTTS) Shutdown(ctx context.Context) error {
 
 	t.logger.Info("tts: shutting down", "state", StateStopped)
 
-	
 	_, _ = fmt.Fprintln(t.stdin, "__EXIT__")
 	_ = t.stdin.Close()
 

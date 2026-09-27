@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	StateWakeStarting = "wake_starting"
-	StateWakeReady    = "wake_ready"
+	StateWakeStarting  = "wake_starting"
+	StateWakeReady     = "wake_ready"
 	StateWakeListening = "wake_listening"
 )
 
@@ -39,9 +39,8 @@ type WakeWordBridge interface {
 var _ WakeWordBridge = (*PythonWakeWord)(nil)
 
 func NewPythonWakeWord(scriptPath string, logger *slog.Logger) *PythonWakeWord {
-	var pythonBin = "/home/gabz/Desktop/projects/mortisgo/mortis-go/venv/bin/python3"
 	return &PythonWakeWord{
-		pythonBin:  pythonBin,
+		pythonBin:  pythonBin(),
 		scriptPath: scriptPath,
 		logger:     logging.New(logger, "PythonWakeWord"),
 	}
@@ -98,7 +97,6 @@ func (t *PythonWakeWord) Start(ctx context.Context) error {
 		return fmt.Errorf("wakeword: startup cancelled: ", ctx.Err())
 	}
 }
-
 
 func (t *PythonWakeWord) Listen() error {
 	t.mu.Lock()

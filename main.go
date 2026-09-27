@@ -63,7 +63,7 @@ func main() {
 	}()
 
 	client := ai.NewGroqClient(apiKey, logger)
-	moduleList := modules.ModulesList()
+	moduleList := modules.ModulesList(client)
 
 	moduleMap := make(map[string]core.Module, len(moduleList))
 	for _, m := range moduleList {
@@ -88,28 +88,21 @@ func main() {
 	defer exchangeSession.Shutdown()
 
 	logger.Info("mortis ready, listening for wake word")
-	runAssistantLoop(ctx, waitWord, manager, moduleMap, exchangeSession)
+	runWakeWordLoop(ctx, waitWord)
+	stt, tts, err := exchangeSession.EnsureStarted(ctx)
+	if err != nil {
+		logger.Error("failed to start exchange session", "error", err)
+		os.Exit(1)
+	}
+	runAssistantLoop(ctx, waitWord, manager, moduleMap, exchangeSession, tts, stt)
 }
 
-func runAssistantLoop(ctx context.Context, wake speech.WakeWordBridge, manager *ai.AIManager, moduleMap map[string]core.Module, exchangeSession *session.ExchangeSession) {
+func runAssistantLoop(ctx context.Context, wake speech.WakeWordBridge, manager *ai.AIManager, moduleMap map[string]core.Module, exchangeSession *session.ExchangeSession, tts *speech.PythonTTS, stt *speech.PythonSTT) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-		}
-
-		if err := wake.Listen(); err != nil {
-			logger.Error("wake word error", "error", err)
-			continue
-		}
-
-		logger.Info("wake word detected")
-
-		stt, tts, err := exchangeSession.EnsureStarted(ctx)
-		if err != nil {
-			logger.Error("failed to start exchange session", "error", err)
-			continue
 		}
 
 		command, err := stt.Listen()
@@ -120,12 +113,29 @@ func runAssistantLoop(ctx context.Context, wake speech.WakeWordBridge, manager *
 
 		if command == "" || command == "no input" {
 			logger.Info("no command heard, returning to wake word mode")
+			runWakeWordLoop(ctx, wake)
 			continue
 		}
+
+		logger.Info("command received", "command", command)
 
 		router := core.NewCommandRouter(tts, moduleMap, logger)
 		handleCommand(ctx, manager, router, command)
 	}
+}
+
+func runWakeWordLoop(ctx context.Context, wake speech.WakeWordBridge) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
+	if err := wake.Listen(); err != nil {
+		logger.Error("wake word error", "error", err)
+	}
+
+	logger.Info("wake word detected")
 }
 
 func handleCommand(ctx context.Context, manager *ai.AIManager, router *core.CommandRouter, transcript string) {
